@@ -251,12 +251,12 @@ RSpec.describe WritableHelper do
 
   describe "#privacy_icon" do
     it "works with alt text" do
-      expected = image_tag("/assets/icons/stars_constellation.png", class: 'vmid', title: 'Constellation Users', alt: 'Constellation Users')
+      expected = image_tag("/assets/icons/stars_constellation.png", class: 'vmid', title: 'Visible to: Constellation Users', alt: 'Constellation Users')
       expect(helper.privacy_icon(:registered)).to eq(expected)
     end
 
     it "works with dark layout switch" do
-      expected = image_tag("/assets/icons/stars_constellation_darkmode.png", class: 'vmid', title: 'Constellation Users', alt: 'Constellation Users')
+      expected = image_tag("/assets/icons/stars_constellation_darkmode.png", class: 'vmid', title: 'Visible to: Constellation Users', alt: 'Constellation Users')
       expect(helper.privacy_icon(:registered, dark_layout: true)).to eq(expected)
     end
 

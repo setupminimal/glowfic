@@ -48,12 +48,12 @@ module PostHelper
   end
 
   PRIVACY_MAP = {
-    # name, icon, icon_darkmode
-    public: ['Public', 'world', 'world'],
-    registered: ['Constellation Users', 'stars_constellation', 'stars_constellation_darkmode'],
-    full_accounts: ['Full Users', 'star_tricolor', 'star_tricolor'],
-    access_list: ['Access List', 'group', 'group'],
-    private: ['Private', 'lock', 'lock'],
+    # name, add_visible_to, icon, icon_darkmode
+    public: ['Public', false, 'world', 'world'],
+    registered: ['Constellation Users', true, 'stars_constellation', 'stars_constellation_darkmode'],
+    full_accounts: ['Full Users', true, 'star_tricolor', 'star_tricolor'],
+    access_list: ['Access List', true, 'group', 'group'],
+    private: ['Private', false, 'lock', 'lock'],
   }
 
   def privacy_state(privacy, dark_layout: false)
@@ -62,10 +62,15 @@ module PostHelper
   end
 
   def privacy_icon(privacy, dark_layout: false, alt: true)
-    name, icon, icon_dark = PRIVACY_MAP[privacy]
+    name, add_visible_to, icon, icon_dark = PRIVACY_MAP[privacy]
     text = alt ? name : ''
     img = dark_layout ? icon_dark : icon
-    image_tag("icons/#{img}.png", class: 'vmid', title: name, alt: text)
+    if add_visible_to
+      title = "Visible to: #{name}"
+    else
+      title = name
+    end
+    image_tag("icons/#{img}.png", class: 'vmid', title: title, alt: text)
   end
 
   def menu_img
