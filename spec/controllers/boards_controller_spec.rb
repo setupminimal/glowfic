@@ -316,7 +316,7 @@ RSpec.describe BoardsController do
       expect(meta_og.keys).to match_array([:url, :title, :description])
       expect(meta_og[:url]).to eq(continuity_url(board))
       expect(meta_og[:title]).to eq('board')
-      expect(meta_og[:description]).to eq("Jane Doe, John Doe – 1 post\nsample board")
+      expect(meta_og[:description]).to eq("Jane Doe, John Doe – 1 visible post\nsample board")
     end
   end
 

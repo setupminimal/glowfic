@@ -188,7 +188,7 @@ class BoardsController < ApplicationController
     metadata = []
     metadata << @board.writers.where.not(deleted: true).ordered.pluck(:username).join(', ') if @board.authors_locked?
     post_count = @board.posts.privacy_public.count
-    stats = "#{post_count} " + "post".pluralize(post_count)
+    stats = "#{post_count} visible " + "post".pluralize(post_count)
     section_count = @board.board_sections.count
     stats += " in #{section_count} " + "section".pluralize(section_count) if section_count > 0
     metadata << stats
