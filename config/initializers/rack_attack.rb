@@ -16,7 +16,10 @@ end
 
 class Rack::Attack
   # Configure Cache
-  Rack::Attack.cache.store = ActiveSupport::Cache::MemoryStore.new # TODO is this right
+  redis_url = ENV.fetch("REDIS_URL", "")
+  Rack::Attack.cache.store = ActiveSupport::Cache::RedisStore.new(
+    url: redis_url, namespace: 'rack-attack'
+  )
 
   # Throttle all requests by IP (60rpm)
   # Key: "rack::attack:#{Time.now.to_i/:period}:req/ip:#{req.ip}"
