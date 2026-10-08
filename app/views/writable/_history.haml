@@ -4,12 +4,13 @@
 %table
   %tbody
     - audits = audited.audits.paginate(page: page)
+    - revisions = audited.revisions_by_version
     - if audits.total_pages > 1
       %tr
         %td{colspan: 2}= render 'posts/paginator', paginated: audits
 
     - audits.each do |audit|
-      - cur = audited.revision(audit.version)
+      - cur = revisions[audit.version]
       - cur.id = nil # hides the permalink buttons
       - reset_cycle
       %tr.bg.spacer{style: 'height:20px;'}
