@@ -82,6 +82,36 @@ RSpec.describe SplitPostJob do
     expect(Reply.find_by(id: reply.id)).not_to be_present
   end
 
+  it "gives each author of the split replies the time of their first split reply without looking authors up one by one" do
+    owner = create(:user)
+    post = create(:post, user: owner)
+    authors = create_list(:user, 4)
+    first_reply = create(:reply, post: post, user: owner)
+    firsts = {}
+    # each author replies twice, interleaved; the later reply of each is created earlier in time than their first by order
+    2.times do |round|
+      authors.each_with_index do |author, index|
+        created_at = Time.zone.now + (round == 0 ? index + 10 : -index - 100).hours
+        reply = create(:reply, post: post, user: author, created_at: created_at)
+        firsts[author.id] ||= reply.created_at
+      end
+    end
+    lookups = []
+    callback = lambda do |*, payload|
+      sql = payload[:sql]
+      lookups << sql if sql.start_with?('SELECT') && sql.match?(/FROM "(users|post_authors)" WHERE/) && sql.exclude?('IN (') && sql.exclude?('!=')
+    end
+
+    ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') { SplitPostJob.perform_now(first_reply.id, title) }
+
+    new_post = Post.last
+    authors.each do |author|
+      expect(new_post.author_for(author).created_at).to be_within(1.second).of(firsts[author.id])
+      expect(new_post.author_for(author).joined_at).to be_within(1.second).of(firsts[author.id])
+    end
+    expect(lookups.size).to be <= 3
+  end
+
   it "copies original post's properties" do
     user = create(:user)
     board = create(:board)

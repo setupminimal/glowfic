@@ -43,8 +43,7 @@ class SplitPostJob < ApplicationJob
 
   def find_authors(other_replies)
     # collect user ids for the new post's replies and created_at of first replies of that set for the author
-    author_ids = other_replies.except(:order).select(:user_id).distinct.pluck(:user_id)
-    author_ids.index_with { |id| other_replies.find_by(user_id: id).created_at }
+    other_replies.reorder(:user_id, :reply_order).pluck(Arel.sql('DISTINCT ON (replies.user_id) replies.user_id, replies.created_at')).to_h
   end
 
   def migrate_replies(other_replies, new_post:, old_post:, first_reply:)
@@ -73,18 +72,24 @@ class SplitPostJob < ApplicationJob
   end
 
   def update_authors(new_authors, new_post:, old_post:)
-    new_authors.each do |user_id, timestamp|
-      user = User.find_by(id: user_id)
-      next unless new_post.author_for(user).nil?
-      existing = old_post.author_for(user)
-      data = {
+    # the users and the existing authors of both posts are each loaded together instead of for each author
+    already_authors = new_post.post_authors.where(user_id: new_authors.keys).pluck(:user_id)
+    old_authors = old_post.post_authors.where(user_id: new_authors.keys).index_by(&:user_id)
+    rows = new_authors.except(*already_authors).map do |user_id, timestamp|
+      existing = old_authors.fetch(user_id)
+      {
+        post_id: new_post.id,
         user_id: user_id,
         created_at: timestamp,
         updated_at: [existing.updated_at, timestamp].max,
         joined_at: timestamp,
       }
-      data.merge!(existing.attributes.slice([:can_owe, :can_reply, :joined]))
-      new_post.post_authors.create!(data)
+    end
+    if rows.present?
+      # inserted together, as none of these users is an author of the new post yet there is nothing to validate;
+      # the callback that clears the block caches is run here for all of them
+      Post::Author.insert_all(rows) # rubocop:disable Rails/SkipsModelValidations
+      Post::Author.clear_cache_for(rows.pluck(:user_id))
     end
     still_valid = (old_post.replies.distinct.pluck(:user_id) + [old_post.user_id]).uniq
     invalid = old_post.post_authors.where.not(user_id: still_valid)
