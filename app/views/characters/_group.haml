@@ -9,9 +9,10 @@
 - if characters.try(:exists?)
   - template_ids = characters.group(:template_id).pluck(:template_id).uniq.compact
   - grouped_template_ids = skip_grouped_templates ? ::Character.where(template_id: template_ids).where.not(character_group_id: nil).distinct.pluck(:template_id) : []
+  - sections, section_settings = preloaded_character_sections(::Character.ordered, template_ids, page_view)
   - ::Template.where(id: template_ids).ordered.each do |template|
     - next if grouped_template_ids.include?(template.id)
-    = render partial_type, name: template, characters: template.characters.ordered
+    = render partial_type, name: template, rows: sections.fetch(template.id, []), settings: section_settings
   - if characters.non_npcs.where(template_id: nil).exists?
     = render partial_type, name: 'No Template', characters: characters.non_npcs.where(template_id: nil).ordered, show_new_character_button: @user.id == current_user&.id
 - else

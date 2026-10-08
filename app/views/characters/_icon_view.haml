@@ -1,4 +1,4 @@
--# locals: ( name: nil, characters: nil, show_template: false, show_user: false, hide_buttons: false, show_new_character_button: false, show_retired: show_retired() )
+-# locals: ( name: nil, characters: nil, show_template: false, show_user: false, hide_buttons: false, show_new_character_button: false, show_retired: show_retired(), rows: nil, settings: nil )
 -# show_template, show_user, and hide_buttons are to match list_section
 
 - characters ||= name.characters.non_npcs.ordered
@@ -34,7 +34,7 @@
 %tr
   %td.icons-box.left-align
     .character-icon-list
-      - charpluck = characters.left_outer_joins(:default_icon).pluck(:id, :name, :screenname, :user_id, :url, :keyword)
+      - charpluck = rows || characters_icons_list(characters)
       = render partial: 'characters/icon_item', collection: charpluck, as: :character
       - unless charpluck.present?
         .centered — No characters yet —

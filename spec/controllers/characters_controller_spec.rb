@@ -74,6 +74,55 @@ RSpec.describe CharactersController do
         expect(response.status).to eq(200)
       end
 
+      context "with several templates" do
+        let(:templates) { create_list(:template, 3, user: user) }
+
+        before(:each) do
+          templates.each do |template|
+            create_list(:character, 2, template: template, user: user, settings: [create(:setting)], default_icon: create(:icon, user: user))
+          end
+          create(:character, user: user, name: 'TemplatelessCharacter')
+          create(:character, user: user, name: 'RetiredCharacter', template: templates.first, retired: true)
+        end
+
+        ['list', 'icons'].each do |view|
+          it "lists every template's characters without querying per template in #{view} view" do
+            expect_no_n_plus_one do
+              get :index, params: { user_id: user.id, character_split: 'template', view: view, retired: false }
+            end
+            expect(response.status).to eq(200)
+            templates.each do |template|
+              expect(response.body).to include(template.name)
+              template.characters.not_retired.each { |templated| expect(response.body).to include(templated.name) }
+            end
+            expect(response.body).to include('TemplatelessCharacter')
+            expect(response.body).not_to include('RetiredCharacter')
+          end
+
+          it "includes retired characters when asked in #{view} view" do
+            get :index, params: { user_id: user.id, character_split: 'template', view: view, retired: true }
+            expect(response.body).to include('RetiredCharacter')
+          end
+
+          it "lists templates within a character group without querying per template in #{view} view" do
+            group = create(:character_group, user: user)
+            templates.each { |template| template.characters.update_all(character_group_id: group.id) } # rubocop:disable Rails/SkipsModelValidations
+            expect_no_n_plus_one do
+              get :index, params: { user_id: user.id, character_split: 'template', view: view, group_id: group.id }
+            end
+            expect(response.status).to eq(200)
+            templates.each { |template| expect(response.body).to include(template.name) }
+          end
+        end
+
+        it "shows each character's settings in list view" do
+          get :index, params: { user_id: user.id, character_split: 'template', view: 'list' }
+          Character.where(user: user, template: templates).find_each do |templated|
+            templated.settings.each { |setting| expect(response.body).to include(setting.name) }
+          end
+        end
+      end
+
       it "skips NPC characters" do
         create(:character, user: character.user, npc: true, name: 'NPCCharacter')
         get :index, params: { user_id: character.user_id }

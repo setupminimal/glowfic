@@ -83,7 +83,9 @@
       - templates = @user.templates.ordered
       - templates = templates.where(retired: false) unless show_retired
       - templates = templates.paginate(per_page: 25, page: page) if templates.count > 50
-      = render partial: partial_type, collection: templates, as: :name
+      - sections, section_settings = preloaded_character_sections(@user.characters.non_npcs.ordered, templates.map(&:id), page_view)
+      - templates.each do |template|
+        = render partial_type, name: template, rows: sections.fetch(template.id, []), settings: section_settings
       - templateless = @user.characters.non_npcs.where(template_id: nil)
       - if templateless.exists? && (templates.methods.exclude?(:total_pages) || templates.total_pages == params[:page].to_i)
         = render partial_type, name: "No Template", characters: templateless.ordered, show_new_character_button: @user.id == current_user&.id
