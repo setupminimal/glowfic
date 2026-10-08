@@ -19,8 +19,14 @@ class MessagesController < ApplicationController
       from_table = from_table.where.not(sender_id: blocked_ids).left_outer_joins(:sender).where('users.deleted IS NULL OR users.deleted = false')
       includes << :sender
     end
+    # The number of messages in each listed thread, worked out by the database as a subquery that is joined onto
+    # the list below (as thread_count, which Message#num_in_thread uses), instead of counting each thread separately.
+    # It counts every message in the thread, so it can't be computed from from_table, which has one row per thread.
+    thread_counts = Message.where(thread_id: from_table.reselect(:thread_id).reorder(nil))
+      .group(:thread_id).select('thread_id, COUNT(*) AS thread_count').to_sql
     @messages = Message.from(from_table, "messages").joins(:first_thread)
-      .select('*', 'first_threads_messages.subject as thread_subject')
+      .joins("LEFT JOIN (#{thread_counts}) AS thread_counts ON thread_counts.thread_id = messages.thread_id")
+      .select('*', 'first_threads_messages.subject as thread_subject', 'thread_counts.thread_count')
       .includes(*includes).order('messages.id desc').paginate(page: page)
     @view = @page_title.downcase
   end
