@@ -29,9 +29,10 @@ class BookmarksController < ApplicationController
       .joins(:post)
       .order('posts.subject, replies.created_at, posts.id')
       .joins(:user)
-      .left_outer_joins(:character)
+      .left_outer_joins(:character, :icon, :character_alias)
       .select('replies.*, bookmarks.id as bookmark_id, bookmarks.name as bookmark_name, bookmarks.public as bookmark_public, characters.name, ' \
-              'characters.screenname, users.username, users.deleted as user_deleted')
+              'characters.screenname, users.username, users.deleted as user_deleted, icons.keyword, icons.url, character_aliases.name as alias')
+      .preload(:post)
       .paginate(page: page)
 
     @search_results = @search_results.where.not(post_id: current_user.hidden_posts) if logged_in? && !params[:show_blocked]

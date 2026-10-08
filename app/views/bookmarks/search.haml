@@ -70,7 +70,7 @@
                 %tr
                   %td.vtop{ class: cycle('even'.freeze, 'odd'.freeze) }
                     .post-info-box
-                      - if reply.icon_id && reply.keyword && !params[:condensed]
+                      - if !params[:condensed] && reply.icon_id && reply.keyword
                         .post-icon
                           = link_to icon_path(reply.icon_id) do
                             = icon_mem_tag reply.url, reply.keyword

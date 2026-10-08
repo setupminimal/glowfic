@@ -35,6 +35,39 @@ RSpec.describe BookmarksController, 'GET search' do
   end
 
   context "searching" do
+    context "with many bookmarks" do
+      render_views
+
+      it "shows each bookmarked reply's icon and character name without querying per bookmark" do
+        user = create(:user)
+        replies = Array.new(3) do |index|
+          author = create(:user)
+          character = create(:character, user: author, name: "Character #{index}")
+          calias = create(:alias, character: character, name: "Alias #{index}") if index.odd?
+          reply = create(:reply, user: author, character: character, character_alias: calias,
+            icon: create(:icon, user: author, keyword: "icon#{index}"),)
+          create(:bookmark, user: user, reply: reply, post: reply.post, public: true)
+          reply
+        end
+        expect_no_n_plus_one { get :search, params: { commit: true, user_id: user.id } }
+        expect(response).to have_http_status(200)
+        expect(assigns(:search_results).size).to eq(3)
+        replies.each_with_index do |reply, index|
+          expect(response.body).to include(reply.icon.keyword)
+          expect(response.body).to include(index.odd? ? "Alias #{index}" : "Character #{index}")
+        end
+      end
+
+      it "leaves icons out of the condensed view" do
+        user = create(:user)
+        author = create(:user)
+        reply = create(:reply, user: author, icon: create(:icon, user: author, keyword: 'hiddenicon'))
+        create(:bookmark, user: user, reply: reply, post: reply.post, public: true)
+        get :search, params: { commit: true, user_id: user.id, condensed: true }
+        expect(response.body).not_to include('hiddenicon')
+      end
+    end
+
     it "finds nothing when no arguments given" do
       create_list(:bookmark, 2)
       get :search, params: { commit: true }
