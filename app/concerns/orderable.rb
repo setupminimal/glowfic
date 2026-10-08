@@ -20,6 +20,8 @@ module Orderable
     private
 
     def reorder_others(is_after)
+      # a newly created record has no previous position to close the gap in, so there is nothing to reorder
+      return if is_after && previously_new_record?
       return unless destroyed? || order_change?(is_after)
 
       # Posts and BoardSections are ordered conditional on their board; all indexes are ordered

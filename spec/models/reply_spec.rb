@@ -186,6 +186,31 @@ RSpec.describe Reply do
     end
   end
 
+  describe "reordering" do
+    let(:post) { create(:post) }
+
+    it "does not look for replies to reorder when a reply is created" do
+      reply = build(:reply, post: post)
+      queries = []
+      callback = ->(*, payload) { queries << payload[:sql] if payload[:sql].match?(/FROM "replies" WHERE "replies"."post_id" IS NULL/) }
+      ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') { reply.save! }
+      expect(queries).to be_empty
+    end
+
+    it "closes the gap left when a reply is moved to another post" do
+      other_post = create(:post)
+      replies = create_list(:reply, 3, post: post)
+      replies.first.update!(post: other_post)
+      expect(post.replies.ordered.map(&:reply_order)).to eq([0, 1])
+    end
+
+    it "closes the gap left when a reply is destroyed" do
+      replies = create_list(:reply, 3, post: post)
+      replies.first.destroy!
+      expect(post.replies.ordered.map(&:reply_order)).to eq([0, 1])
+    end
+  end
+
   describe "#destroy_subsequent_replies" do
     it "works" do
       post = create(:post)
