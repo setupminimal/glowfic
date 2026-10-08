@@ -5,10 +5,27 @@ class Post::Author < ApplicationRecord
 
   validates :user, uniqueness: { scope: :post }
 
-  after_commit :invalidate_caches, on: [:create, :destroy]
+  # users whose block caches need clearing, keyed by the transaction that changed their authorship
+  PENDING_CACHE_USERS = ObjectSpace::WeakMap.new
 
+  after_create :invalidate_caches
+  after_destroy :invalidate_caches
+
+  # Queues the user so that all the authors changed in one transaction have their caches cleared together
+  # (in two queries) once the transaction commits, rather than in a pair of queries per author
   def invalidate_caches
-    self.class.clear_cache_for(user)
+    transaction = self.class.with_connection(&:current_transaction)
+    pending = PENDING_CACHE_USERS[transaction]
+    if pending
+      pending << user_id
+      return
+    end
+
+    pending = PENDING_CACHE_USERS[transaction] = Set[user_id]
+    ActiveRecord.after_all_transactions_commit do
+      PENDING_CACHE_USERS[transaction] = nil
+      self.class.clear_cache_for(pending.to_a)
+    end
   end
 
   def self.clear_cache_for(authors)
