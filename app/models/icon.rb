@@ -10,7 +10,7 @@ class Icon < ApplicationRecord
   has_many :replies, dependent: false
   has_many :reply_drafts, dependent: :nullify
   has_many :galleries_icons, dependent: :destroy, inverse_of: :icon
-  has_many :galleries, through: :galleries_icons, dependent: :destroy
+  has_many :galleries, through: :galleries_icons # the join rows are destroyed by galleries_icons
 
   validates :keyword, presence: true, length: { maximum: 255 }
   validates :url,

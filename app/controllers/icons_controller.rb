@@ -25,19 +25,13 @@ class IconsController < UploadingController
         redirect_to user_galleries_path(current_user) and return
       end
 
-      icons.each do |icon|
-        next unless icon.user_id == current_user.id
-        gallery.icons.destroy(icon)
-      end
+      GalleriesIcon.remove_from_gallery(gallery, icons.where(user_id: current_user.id))
 
       flash[:success] = "Icons removed from gallery."
       icon_redirect(gallery) and return
     end
 
-    icons.each do |icon|
-      next unless icon.user_id == current_user.id
-      icon.destroy
-    end
+    icons.where(user_id: current_user.id).includes(:avatar_user, :galleries_icons).find_each(&:destroy)
     flash[:success] = "Icons deleted."
     icon_redirect(gallery) and return
   end

@@ -117,6 +117,41 @@ RSpec.describe IconsController do
       end
     end
 
+    context "with many icons" do
+      let(:user) { create(:user) }
+      let(:galleries) { create_list(:gallery, 2, user: user) }
+      let(:icons) do
+        create_list(:icon, 3, user: user).each { |icon| galleries.each { |gallery| gallery.icons << icon } }
+      end
+
+      before(:each) { login_as(user) }
+
+      it "removes them from a gallery without querying per icon" do
+        kept = create(:icon, user: user)
+        galleries.first.icons << kept
+        expect_no_n_plus_one do
+          delete :delete_multiple, params: { marked_ids: icons.map(&:id), gallery_id: galleries.first.id, gallery_delete: true }
+        end
+        expect(galleries.first.icons.reload).to eq([kept])
+        expect(galleries.last.icons.reload).to match_array(icons)
+        expect(icons.map { |icon| icon.reload.has_gallery }).to all(be(true))
+      end
+
+      it "marks icons without galleries when removing their last gallery without querying per icon" do
+        solo = create_list(:icon, 3, user: user).each { |icon| galleries.first.icons << icon }
+        expect_no_n_plus_one do
+          delete :delete_multiple, params: { marked_ids: solo.map(&:id), gallery_id: galleries.first.id, gallery_delete: true }
+        end
+        expect(solo.map { |icon| icon.reload.has_gallery }).to all(be(false))
+      end
+
+      it "deletes them from the site without querying per icon" do
+        expect_no_n_plus_one { delete :delete_multiple, params: { marked_ids: icons.map(&:id) } }
+        expect(Icon.where(id: icons.map(&:id))).to be_empty
+        expect(galleries.map { |gallery| gallery.icons.reload.count }).to eq([0, 0])
+      end
+    end
+
     context "deleting icons from the site" do
       let(:user) { create(:user) }
 
