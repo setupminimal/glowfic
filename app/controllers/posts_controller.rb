@@ -75,7 +75,7 @@ class PostsController < WritableController
     posts = posts.visible_to(current_user)
 
     if params[:commit] == "Mark Read"
-      posts.each { |post| post.mark_read(current_user) }
+      posts = Post.mark_all_read(posts, current_user)
       flash[:success] = "#{posts.size} #{'post'.pluralize(posts.size)} marked as read."
     elsif params[:commit] == "Remove from Replies Owed"
       readonly_forbidden and return if current_user.read_only?
@@ -88,7 +88,7 @@ class PostsController < WritableController
       flash[:success] = "#{posts.size} #{'post'.pluralize(posts.size)} added to replies owed."
       redirect_to owed_posts_path and return
     else
-      posts.each { |post| post.ignore(current_user) }
+      posts = Post.ignore_all(posts, current_user)
       flash[:success] = "#{posts.size} #{'post'.pluralize(posts.size)} hidden from this page."
     end
     redirect_to unread_posts_path

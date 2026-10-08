@@ -50,17 +50,35 @@ class NotifyFollowersOfNewPostJob < ApplicationJob
   end
 
   def self.notification_about(post, user, unread_only: false)
-    notif = Notification.find_by(post: post, user: user, notification_type: [:new_favorite_post, :joined_favorite_post])
-    if notif
-      return notif if !unread_only || notif.unread
-    else
-      messages = Message.where(recipient: user, sender_id: 0).where('created_at >= ?', post.created_at)
-      messages = messages.unread if unread_only
-      messages.find_each do |notification|
-        return notification if notification.message.include?(ScrapePostJob.view_post(post.id))
-      end
+    notifications_about([post], user, unread_only: unread_only)[post.id]
+  end
+
+  # Finds, for each of the given posts, the notification (or older-style site message) telling the user about it.
+  # Returns a hash of post id to notification, only containing posts that have one; same rules as notification_about
+  def self.notifications_about(posts, user, unread_only: false)
+    posts = posts.to_a
+    return {} if posts.empty?
+
+    found = {}
+    notifications = Notification.where(post: posts, user: user, notification_type: [:new_favorite_post, :joined_favorite_post]).index_by(&:post_id)
+    legacy = posts.reject do |post|
+      notif = notifications[post.id]
+      found[post.id] = notif if notif && (!unread_only || notif.unread)
+      notif
     end
-    nil
+    return found if legacy.empty?
+
+    messages = Message.where(recipient: user, sender_id: 0).where('created_at >= ?', legacy.map(&:created_at).min)
+    messages = messages.unread if unread_only
+    links = legacy.index_by { |post| ScrapePostJob.view_post(post.id) }
+    messages.find_each do |notification|
+      links.each do |link, post|
+        next if found.key?(post.id) || notification.created_at < post.created_at
+        found[post.id] = notification if notification.message.include?(link)
+      end
+      break if legacy.all? { |post| found.key?(post.id) }
+    end
+    found
   end
 
   def blocked_user_ids(post)

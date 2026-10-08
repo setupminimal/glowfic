@@ -104,6 +104,77 @@ RSpec.describe Post::View do
       expect(user.notifications.first.unread).to eq(false)
     end
 
+    context "when marking many posts read at once" do
+      it "updates notification if unread" do
+        post = make_post
+        other = create(:post)
+        Post.mark_all_read([post, other], user)
+        expect(user.notifications.first.unread).to eq(false)
+        expect(post.reload.last_read(user)).to be_present
+        expect(other.reload.last_read(user)).to be_present
+      end
+
+      it "does not update notification if read" do
+        post = make_post
+        notification = user.notifications.first
+        notification.update!(unread: false, read_at: 1.day.ago)
+        expect { Post.mark_all_read([post], user) }.not_to change { notification.reload.read_at }
+      end
+
+      it "updates message for a followed user if unread" do
+        post = create(:post)
+        create(:favorite, user: user, favorite: post.user)
+        make_message(post, user)
+        Post.mark_all_read([post], user)
+        expect(user.messages.first.unread).to eq(false)
+      end
+
+      it "updates message for a followed continuity if unread" do
+        post = create(:post)
+        create(:favorite, user: user, favorite: post.board)
+        make_message(post, user)
+        Post.mark_all_read([post], user)
+        expect(user.messages.first.unread).to eq(false)
+      end
+
+      it "updates message for a followed coauthor if unread" do
+        post = create(:post)
+        coauthor = create(:reply, post: post).user
+        create(:favorite, user: user, favorite: coauthor)
+        make_message(post, user)
+        Post.mark_all_read([post], user)
+        expect(user.messages.first.unread).to eq(false)
+      end
+
+      it "leaves messages about posts the user doesn't follow alone" do
+        post = create(:post)
+        make_message(post, user)
+        Post.mark_all_read([post], user)
+        expect(user.messages.first.unread).to eq(true)
+      end
+
+      it "matches each post to its own message" do
+        followed = create(:post)
+        other = create(:post)
+        create(:favorite, user: user, favorite: followed.user)
+        create(:favorite, user: user, favorite: other.user)
+        followed_message = make_message(followed, user)
+        other_message = make_message(other, user)
+        Post.mark_all_read([followed], user)
+        expect(followed_message.reload.unread).to eq(false)
+        expect(other_message.reload.unread).to eq(true)
+      end
+
+      it "does not mark notifications read for views that already existed" do
+        post = make_post
+        post.mark_read(user, at_time: 1.day.ago)
+        post.update!(tagged_at: Time.zone.now)
+        user.notifications.first.update!(unread: true)
+        Post.mark_all_read([Post.find(post.id)], user)
+        expect(user.notifications.first.unread).to eq(true)
+      end
+    end
+
     it "does not update notification if read" do
       post = make_post
       notification = user.notifications.first

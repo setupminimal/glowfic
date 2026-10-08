@@ -33,6 +33,18 @@ RSpec.describe PostsController, 'POST mark' do
       expect(posts[1].reload.last_read(user)).not_to be_nil
     end
 
+    it "reads many posts without querying per post" do
+      many = create_list(:post, 3)
+      many[0].mark_read(user, at_time: 1.day.ago)
+      create(:favorite, user: user, favorite: many[1].board)
+      create(:favorite, user: user, favorite: many[2].user)
+
+      expect_no_n_plus_one { post :mark, params: { marked_ids: many.map(&:id), commit: "Mark Read" } }
+
+      expect(flash[:success]).to eq("3 posts marked as read.")
+      expect(many.map { |x| x.reload.last_read(user) }).to all(be_present)
+    end
+
     it "works for reader users" do
       user.update!(role_id: Permissible::READONLY)
 
@@ -60,6 +72,17 @@ RSpec.describe PostsController, 'POST mark' do
       expect(flash[:success]).to eq("2 posts hidden from this page.")
       expect(posts[0].reload.ignored_by?(user)).to eq(true)
       expect(posts[1].reload.ignored_by?(user)).to eq(true)
+    end
+
+    it "ignores many posts without querying per post" do
+      many = create_list(:post, 3)
+      many[0].ignore(user)
+      create(:favorite, user: user, favorite: many[1].board)
+
+      expect_no_n_plus_one { post :mark, params: { marked_ids: many.map(&:id), commit: "Hide from Unread" } }
+
+      expect(flash[:success]).to eq("3 posts hidden from this page.")
+      expect(many.map { |x| x.reload.ignored_by?(user) }).to all(be(true))
     end
 
     it "works for reader users" do
