@@ -11,15 +11,18 @@ class GalleryTag < ApplicationRecord
 
   def add_gallery_to_characters
     return if gallery_group.nil? # skip non-gallery_groups
-    joined_characters = gallery_group.characters.where(id: gallery.characters_galleries.map(&:character_id))
-    characters = gallery_group.characters.where(user_id: gallery.user_id).where.not(id: joined_characters.pluck(:id))
-    characters.each do |character|
-      gallery.characters_galleries.create(character_id: character.id, added_by_group: true)
-    end
+    joined_character_ids = gallery.characters_galleries.map(&:character_id)
+    character_ids = gallery_group.characters.where(user_id: gallery.user_id).where.not(id: joined_character_ids).pluck(:id)
+    CharactersGallery.add_by_group(character_ids.map { |character_id| [character_id, gallery.id] })
+    gallery.characters_galleries.reset
   end
 
   def remove_gallery_from_characters
     return if gallery_group.nil? # skip non-gallery_groups
-    CharactersGallery.where(character: gallery.characters, gallery: gallery, added_by_group: true).destroy_all
+    removed = CharactersGallery.where(character: gallery.characters, gallery: gallery, added_by_group: true)
+    character_ids = removed.pluck(:character_id)
+    removed.delete_all
+    CharactersGallery.reorder_for(character_ids)
+    gallery.characters_galleries.reset
   end
 end

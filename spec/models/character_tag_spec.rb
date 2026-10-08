@@ -72,6 +72,30 @@ RSpec.describe CharacterTag do
       expect(character.characters_galleries.find_by(gallery_id: gallery_both.id)).not_to be_added_by_group
     end
 
+    it "adds and removes a group's galleries in a fixed number of queries and keeps the order tidy" do
+      group = create(:gallery_group)
+      user = create(:user)
+      character = create(:character, user: user)
+      own = create(:gallery, user: user)
+      character.galleries << own
+      group_galleries = create_list(:gallery, 4, user: user, gallery_groups: [group])
+
+      queries = []
+      callback = lambda do |*, payload|
+        queries << payload[:sql] if payload[:sql].include?('characters_galleries') && !payload[:sql].start_with?('SAVEPOINT', 'RELEASE')
+      end
+      ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') { character.update!(gallery_groups: [group]) }
+      expect(queries.size).to be <= 6
+      expect(character.reload.characters_galleries.ordered.map(&:gallery_id)).to eq([own.id] + group_galleries.map(&:id))
+      expect(character.characters_galleries.ordered.map(&:section_order)).to eq([0, 1, 2, 3, 4])
+
+      queries.clear
+      ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') { character.update!(gallery_groups: []) }
+      expect(queries.size).to be <= 6
+      expect(character.reload.characters_galleries.ordered.map(&:gallery_id)).to eq([own.id])
+      expect(character.characters_galleries.ordered.map(&:section_order)).to eq([0])
+    end
+
     it "does not destroy gallery groups when destroyed" do
       group = create(:gallery_group)
       character = create(:character, gallery_groups: [group])

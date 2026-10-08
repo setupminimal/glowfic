@@ -58,4 +58,57 @@ RSpec.describe CharactersGallery do
     expect(cg.persisted?).to be(true)
     expect(cg).to be_valid
   end
+
+  describe ".add_by_group" do
+    it "adds the galleries after each character's existing ones, marked as added by group" do
+      user = create(:user)
+      first, second = create_list(:character, 2, user: user)
+      first_gallery, second_gallery, group_gallery = create_list(:gallery, 3, user: user)
+      first.galleries << first_gallery
+      second.galleries << second_gallery
+
+      CharactersGallery.add_by_group([[first.id, group_gallery.id], [second.id, group_gallery.id]])
+
+      expect(first.characters_galleries.ordered.map(&:gallery_id)).to eq([first_gallery.id, group_gallery.id])
+      expect(second.characters_galleries.ordered.map(&:gallery_id)).to eq([second_gallery.id, group_gallery.id])
+      expect(first.characters_galleries.ordered.map(&:section_order)).to eq([0, 1])
+      expect(first.characters_galleries.ordered.map(&:added_by_group)).to eq([false, true])
+    end
+
+    it "numbers several galleries added to one character in order" do
+      character = create(:character)
+      galleries = create_list(:gallery, 3, user: character.user)
+      CharactersGallery.add_by_group(galleries.map { |gallery| [character.id, gallery.id] })
+      expect(character.characters_galleries.ordered.map(&:gallery_id)).to eq(galleries.map(&:id))
+      expect(character.characters_galleries.ordered.map(&:section_order)).to eq([0, 1, 2])
+    end
+
+    it "does nothing with nothing to add" do
+      expect { CharactersGallery.add_by_group([]) }.not_to change { CharactersGallery.count }
+    end
+  end
+
+  describe ".reorder_for" do
+    it "closes gaps in the order of each given character's galleries only" do
+      user = create(:user)
+      first, second, untouched = create_list(:character, 3, user: user)
+      galleries = create_list(:gallery, 3, user: user)
+      [first, second, untouched].each { |character| galleries.each { |gallery| character.galleries << gallery } }
+      first.characters_galleries.find_by(gallery: galleries[0]).update_columns(section_order: 5) # rubocop:disable Rails/SkipsModelValidations
+      first.characters_galleries.find_by(gallery: galleries[1]).update_columns(section_order: 9) # rubocop:disable Rails/SkipsModelValidations
+      second.characters_galleries.find_by(gallery: galleries[2]).update_columns(section_order: 7) # rubocop:disable Rails/SkipsModelValidations
+      untouched.characters_galleries.find_by(gallery: galleries[0]).update_columns(section_order: 4) # rubocop:disable Rails/SkipsModelValidations
+
+      CharactersGallery.reorder_for([first.id, second.id])
+
+      expect(first.characters_galleries.ordered.map(&:section_order)).to eq([0, 1, 2])
+      expect(first.characters_galleries.ordered.map(&:gallery_id)).to eq([galleries[2].id, galleries[0].id, galleries[1].id])
+      expect(second.characters_galleries.ordered.map(&:section_order)).to eq([0, 1, 2])
+      expect(untouched.characters_galleries.ordered.map(&:section_order)).to include(4)
+    end
+
+    it "does nothing with no characters" do
+      expect { CharactersGallery.reorder_for([]) }.not_to raise_error
+    end
+  end
 end

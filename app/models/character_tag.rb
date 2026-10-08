@@ -13,11 +13,10 @@ class CharacterTag < ApplicationRecord
   def add_galleries_to_character
     return if association(:setting).target.present? # built as a setting, so not a gallery group; avoids loading gallery_group
     return if gallery_group.nil? # skip non-gallery_groups
-    joined_galleries = gallery_group.galleries.where(id: character.characters_galleries.map(&:gallery_id))
-    galleries = gallery_group.galleries.where(user_id: character.user_id).where.not(id: joined_galleries.pluck(:id))
-    galleries.each do |gallery|
-      character.characters_galleries.create(gallery_id: gallery.id, added_by_group: true)
-    end
+    joined_gallery_ids = character.characters_galleries.map(&:gallery_id)
+    gallery_ids = gallery_group.galleries.where(user_id: character.user_id).where.not(id: joined_gallery_ids).pluck(:id)
+    CharactersGallery.add_by_group(gallery_ids.map { |gallery_id| [character.id, gallery_id] })
+    character.characters_galleries.reset
   end
 
   def remove_galleries_from_character
@@ -25,7 +24,8 @@ class CharacterTag < ApplicationRecord
     galleries = gallery_group.galleries.where(user_id: character.user_id)
     joined_group_galleries = character.gallery_groups.joins(:galleries).where(galleries: { user_id: character.user_id }).pluck(:gallery_id)
     galleries = galleries.where.not(id: joined_group_galleries)
-    character.characters_galleries.where(gallery: galleries, added_by_group: true).destroy_all
+    character.characters_galleries.where(gallery: galleries, added_by_group: true).delete_all
+    CharactersGallery.reorder_for([character.id])
     character.characters_galleries.reload
   end
 end

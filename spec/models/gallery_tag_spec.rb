@@ -72,6 +72,53 @@ RSpec.describe GalleryTag do
       expect(gallery.characters_galleries.find_by(character_id: character_both.id)).not_to be_added_by_group
     end
 
+    it "adds and removes a group's gallery for many characters in a fixed number of queries" do
+      group = create(:gallery_group)
+      user = create(:user)
+      characters = create_list(:character, 4, user: user, gallery_groups: [group])
+      existing = create(:gallery, user: user)
+      characters.each { |character| character.galleries << existing }
+      gallery = create(:gallery, user: user)
+
+      queries = []
+      callback = ->(*, payload) {
+        queries << payload[:sql] if payload[:sql].include?('characters_galleries') && !payload[:sql].start_with?('SAVEPOINT', 'RELEASE')
+      }
+      ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') do
+        gallery.update!(gallery_groups: [group])
+        gallery.update!(gallery_groups: [])
+      end
+
+      expect(queries.size).to be <= 8
+      characters.each { |character| expect(character.characters_galleries.ordered.map(&:gallery_id)).to eq([existing.id]) }
+    end
+
+    it "puts the group's gallery after the character's existing galleries" do
+      group = create(:gallery_group)
+      user = create(:user)
+      character = create(:character, user: user, gallery_groups: [group])
+      earlier = create(:gallery, user: user)
+      character.galleries << earlier
+      gallery = create(:gallery, user: user, gallery_groups: [group])
+
+      expect(character.characters_galleries.ordered.map(&:gallery_id)).to eq([earlier.id, gallery.id])
+      expect(character.characters_galleries.ordered.map(&:section_order)).to eq([0, 1])
+    end
+
+    it "closes the gap in a character's galleries when a group's gallery is removed" do
+      group = create(:gallery_group)
+      user = create(:user)
+      character = create(:character, user: user, gallery_groups: [group])
+      grouped = create(:gallery, user: user, gallery_groups: [group])
+      later = create(:gallery, user: user)
+      character.galleries << later
+
+      grouped.update!(gallery_groups: [])
+
+      expect(character.characters_galleries.ordered.map(&:gallery_id)).to eq([later.id])
+      expect(character.characters_galleries.ordered.map(&:section_order)).to eq([0])
+    end
+
     it "does not destroy gallery groups when destroyed" do
       group = create(:gallery_group)
       gallery = create(:gallery, gallery_groups: [group])
