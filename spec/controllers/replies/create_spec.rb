@@ -558,6 +558,16 @@ RSpec.describe RepliesController, 'POST create' do
       json.merge(attrs)
     end
 
+    # audits are written for each reply (looking up their version number), which this isn't about; other specs can leave auditing on
+    around(:each) do |example|
+      previous = [Reply.auditing_enabled, Post.auditing_enabled]
+      Reply.auditing_enabled = false
+      Post.auditing_enabled = false
+      example.run
+    ensure
+      Reply.auditing_enabled, Post.auditing_enabled = previous
+    end
+
     before(:each) do
       create(:reply, post: reply_post)
       reply_post.mark_read(user)
