@@ -262,7 +262,9 @@ class Post < ApplicationRecord
 
   # only returns for authors who have written in the post (it's zero for authors who have not joined)
   def author_word_counts
-    joined_authors.map { |author| [author.deleted? ? '(deleted user)' : author.username, word_count_for(author)] }.sort_by { |a| -a[1] }
+    counts = reply_word_count_sums_by_user
+    counts[user_id] += word_count
+    joined_authors.map { |author| [author.deleted? ? '(deleted user)' : author.username, counts[author.id]] }.sort_by { |a| -a[1] }
   end
 
   def character_appearance_counts
@@ -308,6 +310,13 @@ class Post < ApplicationRecord
     cached = scope.where.not(word_count: nil).sum(:word_count)
     uncached = scope.where(word_count: nil).sum(&:computed_word_count)
     cached + uncached
+  end
+
+  # Like reply_word_count_sum, but for every user who has replied at once, as a hash of user id to word count
+  def reply_word_count_sums_by_user
+    counts = Hash.new(0).merge(replies.where.not(word_count: nil).group(:user_id).sum(:word_count))
+    replies.where(word_count: nil).find_each { |reply| counts[reply.user_id] += reply.computed_word_count }
+    counts
   end
 
   def adjacent_posts_for(user)

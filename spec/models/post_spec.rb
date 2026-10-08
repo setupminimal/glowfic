@@ -489,6 +489,37 @@ RSpec.describe Post do
       expect(counts[2][1]).to eq(1)
     end
 
+    it "counts replies whose word count has not been cached" do
+      post = create(:post, content: 'one')
+      cached = create(:reply, post: post, content: 'two two')
+      uncached = create(:reply, post: post, content: 'three three three')
+      uncached.update_columns(word_count: nil) # rubocop:disable Rails/SkipsModelValidations
+      same_user = create(:reply, post: post, user: cached.user, content: 'four four four four')
+      same_user.update_columns(word_count: nil) # rubocop:disable Rails/SkipsModelValidations
+      counts = Post.find(post.id).author_word_counts.to_h
+      expect(counts[cached.user.username]).to eq(6)
+      expect(counts[uncached.user.username]).to eq(3)
+      expect(counts[post.user.username]).to eq(1)
+    end
+
+    it "counts each author's words without querying per author" do
+      post = create(:post, content: 'one')
+      create_list(:reply, 4, post: post, content: 'two two')
+      post = Post.find(post.id)
+      queries = []
+      callback = ->(*, payload) { queries << payload[:sql] if payload[:sql].start_with?('SELECT') && payload[:sql].include?('FROM "replies"') }
+      ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') { post.author_word_counts }
+      expect(queries.size).to be <= 2
+    end
+
+    it "labels deleted authors" do
+      post = create(:post, content: 'one')
+      reply = create(:reply, post: post, content: 'two two')
+      reply.user.archive
+      counts = Post.find(post.id).author_word_counts.to_h
+      expect(counts['(deleted user)']).to eq(2)
+    end
+
     it "handles never posted users" do
       post = create(:post)
       expect(post.word_count_for(create(:user))).to eq(0)
