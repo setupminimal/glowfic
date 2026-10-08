@@ -97,8 +97,10 @@
             .saveconf.float-right.hidden
               = image_tag "icons/accept.png", title: 'Saved', class: 'vmid', alt: ''
               Saved
+      - icon_rows = Gallery.icon_rows_for(galleries)
+      - character_galleries = @character.characters_galleries.index_by(&:gallery_id)
       - galleries.each do |gallery|
-        = render 'galleries/single', gallery: gallery, klass: 'subber', skip_forms: true, character_gallery: gallery.character_gallery_for(@character), is_owner: @character.user == current_user
+        = render 'galleries/single', gallery: gallery, icons: icon_rows.fetch(gallery.id, []), klass: 'subber', skip_forms: true, character_gallery: character_galleries[gallery.id], is_owner: @character.user == current_user
       - unless galleries.present?
         %tbody
           %tr

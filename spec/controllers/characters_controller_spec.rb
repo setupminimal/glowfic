@@ -397,6 +397,29 @@ RSpec.describe CharactersController do
     let(:character) { create(:character) }
     let(:user) { create(:user, username: 'John Doe') }
 
+    context "with several galleries" do
+      render_views
+
+      it "shows each gallery and its icons and groups without querying per gallery" do
+        owner = create(:user)
+        galleried = create(:character, user: owner)
+        group = create(:gallery_group)
+        galleries = create_list(:gallery, 3, user: owner)
+        galleries.each_with_index do |gallery, index|
+          galleried.galleries << gallery
+          gallery.gallery_groups << group if index.even?
+          create_list(:icon, 2, user: owner).each { |icon| gallery.icons << icon }
+        end
+        expect_no_n_plus_one { get :show, params: { id: galleried.id, view: 'galleries' } }
+        expect(response).to have_http_status(200)
+        galleries.each do |gallery|
+          expect(response.body).to include(gallery.name)
+          gallery.icons.each { |icon| expect(response.body).to include(icon.keyword) }
+        end
+        expect(response.body).to include(group.name)
+      end
+    end
+
     it "requires valid character logged out" do
       get :show, params: { id: -1 }
       expect(response).to redirect_to(root_url)

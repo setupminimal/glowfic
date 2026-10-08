@@ -168,6 +168,27 @@ RSpec.describe IconsController do
   describe "GET show" do
     let(:icon) { create(:icon) }
 
+    context "with several galleries" do
+      render_views
+
+      it "shows each gallery and its icons and groups without querying per gallery" do
+        group = create(:gallery_group)
+        galleries = create_list(:gallery, 3, user: icon.user)
+        galleries.each do |gallery|
+          gallery.icons << icon
+          gallery.gallery_groups << group
+          create_list(:icon, 2, user: icon.user).each { |other| gallery.icons << other }
+        end
+        expect_no_n_plus_one { get :show, params: { id: icon.id, view: 'galleries' } }
+        expect(response).to have_http_status(200)
+        galleries.each do |gallery|
+          expect(response.body).to include(gallery.name)
+          gallery.icons.each { |gallery_icon| expect(response.body).to include(gallery_icon.keyword) }
+        end
+        expect(response.body).to include(group.name)
+      end
+    end
+
     it "requires valid icon logged out" do
       get :show, params: { id: -1 }
       expect(response).to redirect_to(root_url)

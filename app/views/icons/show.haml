@@ -80,7 +80,9 @@
         %tr
           %th.table-title Galleries
       - if @galleries.present?
-        = render partial: 'galleries/single', collection: @galleries, as: :gallery, locals: { klass: 'subber', skip_forms: true, is_owner: @icon.user == current_user }
+        - icon_rows = Gallery.icon_rows_for(@galleries)
+        - @galleries.each do |gallery|
+          = render 'galleries/single', gallery: gallery, icons: icon_rows.fetch(gallery.id, []), klass: 'subber', skip_forms: true, is_owner: @icon.user == current_user
       - else
         %tbody
           %tr

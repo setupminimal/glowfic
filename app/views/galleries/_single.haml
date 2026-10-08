@@ -1,5 +1,5 @@
 -# locals: ( gallery:, icons: nil, character_gallery: nil, is_owner: false, skip_forms: false, hide_minmax: false, klass: '' )
--# icons and skip_forms are passed to views
+-# icons and skip_forms are passed to views; icons can be a relation or the [id, keyword, url, credit] of each (see Gallery.icon_rows_for)
 
 - attrs = {}
 - gallery_klass = []
@@ -57,7 +57,7 @@
     %tr.gallery-subheader
       %th.sub Unsorted icons without a gallery will appear here. They can still be individually assigned to a character with no galleries.
   - icons ||= gallery ? gallery.icons : @user.galleryless_icons
-  - icons = icons.pluck(:id, :keyword, :url, :credit)
+  - icons = icons.pluck(:id, :keyword, :url, :credit) unless icons.is_a?(Array) # already plucked rows can be given
   - if page_view == 'list' && icons.present?
     = render partial_type, gallery: gallery, icons: icons, is_owner: is_owner, skip_forms: skip_forms
   - else

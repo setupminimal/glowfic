@@ -59,6 +59,14 @@ class Gallery < ApplicationRecord
     @gallery_groups_data
   end
 
+  # The [id, keyword, url, credit] of each icon in each of the galleries, in the order of gallery.icons,
+  # keyed by gallery id; for showing several galleries without loading the icons of each separately
+  def self.icon_rows_for(galleries)
+    rows = Icon.joins(:galleries_icons).where(galleries_icons: { gallery_id: galleries.map(&:id) })
+      .ordered.pluck('galleries_icons.gallery_id', :id, :keyword, :url, :credit)
+    rows.group_by(&:first).transform_values { |gallery_rows| gallery_rows.map { |row| row[1..] } }
+  end
+
   def character_gallery_for(character)
     characters_galleries.find_by(character_id: character)
   end
