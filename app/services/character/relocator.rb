@@ -104,8 +104,13 @@ class Character::Relocator < Object
       @drafts.update_all(user_id: new_user_id)
       # rubocop:enable Rails/SkipsModelValidations
 
-      @new_authors.each { |post_id| Post::Author.create!(post_id: post_id, user_id: new_user_id) }
-      @rem_authors.each { |post_id| Post::Author.find_by!(post_id: post_id, user_id: @user_id).destroy! }
+      # the posts and user are loaded together for the validations of each new author, which would otherwise load them for each
+      posts = Post.where(id: @new_authors).index_by(&:id)
+      new_user = User.find(new_user_id)
+      @new_authors.each { |post_id| Post::Author.create!(post: posts.fetch(post_id), user: new_user) }
+      removed_authors = Post::Author.where(post_id: @rem_authors, user_id: @user_id).to_a
+      raise ActiveRecord::RecordNotFound if removed_authors.size != @rem_authors.size
+      removed_authors.each(&:destroy!)
 
       UpdateModelJob.perform_later(Post.to_s, { character_id: @characters.ids }, { user_id: new_user_id }, @audited_user_id)
       UpdateModelJob.perform_later(Reply.to_s, { character_id: @characters.ids }, { user_id: new_user_id }, @audited_user_id)

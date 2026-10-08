@@ -135,4 +135,30 @@ RSpec.describe Character::Relocator do
 
     expect(draft.reload.user_id).to eq(target)
   end
+
+  describe 'post authors' do
+    it 'moves authorship for many posts without looking each author up separately' do
+      character = create(:character, user: user)
+      posts = create_list(:post, 4, user: user, character: character)
+      lookups = []
+      callback = lambda do |*, payload|
+        sql = payload[:sql]
+        if sql.start_with?('SELECT') && sql.match?(/FROM "(post_authors|users|posts)" WHERE "\w+"\."(id|post_id)" = \$1/) && sql.exclude?('IN (')
+          lookups << sql
+        end
+      end
+
+      ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') { relocator.transfer([character.id], target) }
+
+      expect(lookups.size).to be <= 4
+      posts.each { |post| expect(post.reload.authors.ids).to eq([target]) }
+    end
+
+    it 'fails if an author to remove cannot be found' do
+      character = create(:character, user: user)
+      post = create(:post, user: user, character: character)
+      Post::Author.where(post_id: post.id, user_id: user.id).delete_all
+      expect { relocator.transfer([character.id], target) }.to raise_error(ActiveRecord::RecordNotFound)
+    end
+  end
 end
