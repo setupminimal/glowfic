@@ -326,6 +326,8 @@ GEM
     pg (1.6.3-x86_64-darwin)
     pg (1.6.3-x86_64-linux)
     pg (1.6.3-x86_64-linux-musl)
+    pg_query (6.2.5)
+      google-protobuf (>= 4.34.0)
     pg_search (2.4.0)
       activerecord (>= 8.0)
       activesupport (>= 8.0)
@@ -335,6 +337,7 @@ GEM
       prettyprint
     prettyprint (0.2.0)
     prism (1.9.0)
+    prosopite (2.2.0)
     public_suffix (7.0.5)
     puma (8.0.2)
       nio4r (~> 2.0)
@@ -633,7 +636,9 @@ DEPENDENCIES
   nokogiri
   parallel_tests
   pg (~> 1.6)
+  pg_query
   pg_search
+  prosopite
   puma
   rack-attack
   rack-cors

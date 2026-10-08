@@ -85,6 +85,8 @@ group :development, :test do
   gem 'database_cleaner'
   gem 'dotenv'
   gem 'parallel_tests'
+  gem 'pg_query' # required by prosopite
+  gem 'prosopite'
   gem 'rake', '~> 13.4'
   gem 'rspec-rails'
   gem 'seed_dump', '~> 3.4'

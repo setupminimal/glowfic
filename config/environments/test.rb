@@ -83,4 +83,7 @@ Rails.application.configure do
 
   # don't use digest string
   config.assets.digest = false
+
+  # Log (but don't raise on) N+1 queries detected during controller requests
+  Prosopite.rails_logger = true
 end
