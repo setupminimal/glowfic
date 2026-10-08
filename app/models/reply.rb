@@ -24,6 +24,11 @@ class Reply < ApplicationRecord
 
   attr_accessor :skip_notify, :skip_post_update, :is_import, :skip_regenerate
 
+  # When several replies by one user are saved in a row to the same post (the multi-reply editor), the reply
+  # saved immediately before this one. The earlier reply already cleared the user's draft and joined them to the
+  # post, and this reply follows it, so those don't need to be looked up again.
+  attr_accessor :batch_predecessor
+
   pg_search_scope(
     :search,
     against: %i(content),
@@ -98,7 +103,7 @@ class Reply < ApplicationRecord
   end
 
   def destroy_draft
-    return if is_import
+    return if is_import || batch_predecessor
     ReplyDraft.draft_for(post_id, user_id).try(:destroy)
   end
 
@@ -116,7 +121,7 @@ class Reply < ApplicationRecord
   def previous_reply
     return @prev if defined?(@prev)
 
-    @prev = post.replies.find_by(reply_order: reply_order - 1)
+    @prev = batch_predecessor || post.replies.find_by(reply_order: reply_order - 1)
   end
 
   def author_can_write_in_post
@@ -132,6 +137,7 @@ class Reply < ApplicationRecord
   end
 
   def update_post_authors
+    return if batch_predecessor
     post_author = post.author_for(user)
     return if post_author&.joined?
 

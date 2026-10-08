@@ -230,6 +230,7 @@ class RepliesController < WritableController
     @multi_replies = @multi_replies_params.map do |reply_params|
       Reply.new(reply_params).tap { |r| r.user = current_user }
     end
+    preload_multi_replies(@multi_replies)
   end
 
   def preview_reply(reply)
@@ -291,6 +292,7 @@ class RepliesController < WritableController
       @multi_replies << new_reply
       @multi_replies_params << permitted_params
     end
+    prepare_multi_replies(@multi_replies)
 
     first_reply = @multi_replies.first
     replies_post = first_reply.post
@@ -351,6 +353,29 @@ class RepliesController < WritableController
     redirect_to reply_path(first_reply, anchor: "reply-#{first_reply.id}")
   end
 
+  # Loads everything the replies need (their post and its board, characters, icons and aliases) together,
+  # so that validating, previewing and saving a list of replies doesn't load each reply's own copy
+  def preload_multi_replies(replies)
+    ActiveRecord::Associations::Preloader.new(records: replies, associations: [{ post: :board }, :character, :icon, :character_alias]).call
+  end
+
+  # Numbers the new replies from one count of their post's replies, and tells each which reply is saved before it so
+  # that it can skip work that reply already did (see Reply#batch_predecessor)
+  def prepare_multi_replies(replies)
+    preload_multi_replies(replies)
+    next_orders = replies.filter_map(&:post).uniq.to_h { |post| [post.id, post.replies.count] }
+
+    replies.each_with_index do |reply, index|
+      next unless reply.post
+      if reply.order.blank?
+        reply.order = next_orders[reply.post_id]
+        next_orders[reply.post_id] += 1
+      end
+      previous = replies[index - 1] if index > 0
+      reply.batch_predecessor = previous if previous && previous.post_id == reply.post_id && previous.user_id == reply.user_id
+    end
+  end
+
   def editing_multi_reply?
     # If the list of params is present and the first item on the list has the ID stored, I am editing it
     # @reply isn't set correctly at this point so I update it to be the reply found by the first multi-reply element's ID
@@ -405,19 +430,35 @@ class RepliesController < WritableController
     following_replies = @reply.post.replies.where("reply_order > ?", original_order)
     following_replies.update_all(["reply_order = reply_order + ?", num_new_replies]) # rubocop:disable Rails/SkipsModelValidations
 
+    # Load the characters and icons the new replies use together, rather than each validation loading its own
+    character_ids = [reply_contents.character_id, *@multi_replies_params.pluck(:character_id)].compact_blank.map(&:to_i).uniq
+    icon_ids = [reply_contents.icon_id, *@multi_replies_params.pluck(:icon_id)].compact_blank.map(&:to_i).uniq
+    characters = Character.where(id: character_ids).index_by(&:id)
+    icons = Icon.where(id: icon_ids).index_by(&:id)
+    use_loaded = lambda do |reply|
+      reply.association(:character).target = characters[reply.character_id] if characters.key?(reply.character_id)
+      reply.association(:icon).target = icons[reply.icon_id] if icons.key?(reply.icon_id)
+    end
+
     # Create the new replies
     @multi_replies_params.each_with_index do |reply_params, idx|
       # Create a fake temporary reply with the contents of the original one to be in history
       @multi_replies[idx] = new_reply = reply_contents.dup
       new_reply.order = original_order + idx + 1
+      new_reply.association(:post).target = @reply.post
+      new_reply.association(:user).target = @reply.user
+      new_reply.batch_predecessor = @multi_replies[idx - 1] if idx > 0
       new_reply.created_at = @reply.created_at
       new_reply.skip_post_update = true
       new_reply.is_import = true
       new_reply.skip_notify = true
+      use_loaded.call(new_reply)
       new_reply.save!
 
       # Update the new reply added with the actual params that should be there
-      new_reply.update!(reply_params)
+      new_reply.assign_attributes(reply_params)
+      use_loaded.call(new_reply)
+      new_reply.save!
     end
   end
 end

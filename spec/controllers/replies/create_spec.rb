@@ -542,4 +542,74 @@ RSpec.describe RepliesController, 'POST create' do
     expect(reply.content).to eq(searchable)
     expect(reply.reply_order).to eq(2)
   end
+
+  context "with multiple replies" do
+    let(:user) { create(:user) }
+    let(:reply_post) { create(:post) }
+    let(:character) { create(:character, user: user) }
+    let(:icon) { create(:icon, user: user) }
+
+    # each reply uses its own character and icon, so that loading them one at a time would be noticed
+    def reply_json(content, with_alias: false, **attrs)
+      own_character = create(:character, user: user)
+      own_icon = create(:icon, user: user)
+      json = { post_id: reply_post.id, content: content, editor_mode: 'html', character_id: own_character.id, icon_id: own_icon.id }
+      json[:character_alias_id] = create(:alias, character: own_character).id if with_alias
+      json.merge(attrs)
+    end
+
+    before(:each) do
+      create(:reply, post: reply_post)
+      reply_post.mark_read(user)
+      login_as(user)
+    end
+
+    it "posts them in order without querying per reply" do
+      draft = create(:reply_draft, post: reply_post, user: user)
+      json = [reply_json('first'), reply_json('second', with_alias: true), reply_json('third')].to_json
+
+      expect_no_n_plus_one do
+        post :create, params: { button_submit_previewed_multi_reply: true, multi_replies_json: json }
+      end
+
+      replies = reply_post.replies.ordered.last(3)
+      expect(replies.map(&:content)).to eq(['first', 'second', 'third'])
+      expect(replies.map(&:reply_order)).to eq([1, 2, 3])
+      expect(replies.map { |reply| reply.character_alias_id.present? }).to eq([false, true, false])
+      expect(flash[:success]).to eq("Replies posted.")
+      expect(ReplyDraft.find_by(id: draft.id)).to be_nil
+      expect(reply_post.reload.last_reply).to eq(replies.last)
+      expect(reply_post.last_user).to eq(user)
+      expect(reply_post.author_for(user)).to be_joined
+    end
+
+    context "when previewing" do
+      render_views
+
+      it "previews them without querying per reply" do
+        json = [reply_json('first', with_alias: true), reply_json('second', with_alias: true)].to_json
+
+        expect_no_n_plus_one do
+          post :create, params: { button_add_more: true, multi_replies_json: json, reply: reply_json('third', with_alias: true) }
+        end
+
+        expect(response).to have_http_status(200)
+        expect(assigns(:multi_replies).map(&:content)).to eq(['first', 'second', 'third'])
+      end
+    end
+
+    it "edits one reply into several without querying per reply" do
+      original = create(:reply, post: reply_post, user: user, character: character, icon: icon, content: 'original')
+      later = create(:reply, post: reply_post)
+      json = [reply_json('edited', id: original.id), reply_json('added one'), reply_json('added two')].to_json
+
+      expect_no_n_plus_one do
+        post :create, params: { button_submit_previewed_multi_reply: true, multi_replies_json: json }
+      end
+
+      expect(reply_post.replies.ordered.last(4).map(&:content)).to eq(['edited', 'added one', 'added two', later.content])
+      expect(reply_post.replies.ordered.map(&:reply_order)).to eq([0, 1, 2, 3, 4])
+      expect(original.reload.content).to eq('edited')
+    end
+  end
 end
