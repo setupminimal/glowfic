@@ -3,7 +3,10 @@ class CharactersGallery < ApplicationRecord
   belongs_to :character, inverse_of: :characters_galleries, optional: false
   belongs_to :gallery, inverse_of: :characters_galleries, optional: false
 
-  before_create :autofill_order
+  # set when the position is already known, as when a character's galleries are set all at once
+  attr_accessor :section_order_preset
+
+  before_create :autofill_order, unless: :section_order_preset
   after_destroy :reorder_others
 
   validates :character, uniqueness: { scope: :gallery }

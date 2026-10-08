@@ -80,6 +80,8 @@ RSpec.describe Character do
   end
 
   describe "#ungrouped_gallery_ids=" do
+    let(:user) { create(:user) }
+
     it "adds unattached galleries" do
       user = create(:user)
       character = create(:character, user: user)
@@ -260,6 +262,42 @@ RSpec.describe Character do
           expect(character.gallery_groups).to match_array([group2])
         end
       end
+    end
+
+    it "keeps kept galleries first and appends new ones in order, closing the gap left by removed ones" do
+      character = create(:character, user: user)
+      first, second, third, fourth = create_list(:gallery, 4, user: user)
+      character.galleries << first
+      character.galleries << second
+
+      character.ungrouped_gallery_ids = [second.id, third.id, fourth.id].map(&:to_s)
+      character.save!
+
+      ordered = character.reload.characters_galleries.ordered
+      expect(ordered.map(&:gallery_id)).to eq([second.id, third.id, fourth.id])
+      expect(ordered.map(&:section_order)).to eq([0, 1, 2])
+      expect(ordered.map(&:added_by_group)).to eq([false, false, false])
+    end
+
+    it "orders the galleries of a new character as given" do
+      galleries = create_list(:gallery, 3, user: user)
+      character = build(:character, user: user)
+      character.ungrouped_gallery_ids = galleries.map { |gallery| gallery.id.to_s }
+      character.save!
+      expect(character.reload.characters_galleries.ordered.map(&:gallery_id)).to eq(galleries.map(&:id))
+      expect(character.characters_galleries.ordered.map(&:section_order)).to eq([0, 1, 2])
+    end
+
+    it "does not count the character's galleries for each new gallery" do
+      character = create(:character, user: user)
+      galleries = create_list(:gallery, 3, user: user)
+      queries = []
+      callback = ->(*, payload) { queries << payload[:sql] if payload[:sql].start_with?('SELECT COUNT(*) FROM "characters_galleries"') }
+      ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') do
+        character.ungrouped_gallery_ids = galleries.map { |gallery| gallery.id.to_s }
+        character.save!
+      end
+      expect(queries).to be_empty
     end
   end
 

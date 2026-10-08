@@ -258,6 +258,23 @@ RSpec.describe CharactersController do
   end
 
   describe "POST create" do
+    it "creates a character with several galleries without loading each gallery separately" do
+      user = create(:user)
+      login_as(user)
+      galleries = create_list(:gallery, 3, user: user)
+      queries = []
+      callback = ->(*, payload) {
+        queries << payload[:sql] if payload[:sql].start_with?('SELECT "galleries".* FROM "galleries" WHERE "galleries"."id" = $1')
+      }
+
+      ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') do
+        post :create, params: { character: { name: 'Galleried', ungrouped_gallery_ids: galleries.map(&:id) } }
+      end
+
+      expect(queries).to be_empty
+      expect(Character.find_by(name: 'Galleried').characters_galleries.ordered.map(&:gallery_id)).to eq(galleries.map(&:id))
+    end
+
     it "requires login" do
       post :create
       expect(response).to redirect_to(root_url)

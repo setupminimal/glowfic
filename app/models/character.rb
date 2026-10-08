@@ -133,9 +133,15 @@ class Character < ApplicationRecord
           char_gal.destroy
         end
       end
+      galleries_by_id = Gallery.where(id: new_ids).index_by(&:id) # loaded together, rather than each when validating
+      next_order = new_chargals.size # the old galleries kept (all the others are gone) are what each new one's position follows
       new_ids.each do |gallery_id|
-        # add any leftover new galleries
-        new_chargals << CharactersGallery.new(gallery_id: gallery_id, character_id: id, added_by_group: false)
+        # add any leftover new galleries, after those kept, without counting the character's galleries for each
+        new_chargal = CharactersGallery.new(gallery_id: gallery_id, character_id: id, added_by_group: false, section_order: next_order,
+          section_order_preset: true,)
+        next_order += 1
+        new_chargal.association(:gallery).target = galleries_by_id[gallery_id] if galleries_by_id.key?(gallery_id)
+        new_chargals << new_chargal
       end
       # leftover galleries from gallery groups will be added by that model
       self.characters_galleries = new_chargals
