@@ -27,8 +27,16 @@ class UpdateModelJob < ApplicationJob
     end
   end
 
+  # What the callbacks and validations of each kind of model look up, loaded with the models instead of for each
+  PRELOADS = {
+    'Post'      => [:board, :user],
+    'Reply'     => [{ post: :board }, :user],
+    'Character' => [:user],
+  }.freeze
+
   def update_records(klass, where_vals, new_attrs)
-    klass.constantize.where(where_vals).find_each do |model|
+    model_class = klass.constantize
+    model_class.where(where_vals).preload(*PRELOADS.fetch(klass, [])).find_each do |model|
       model.update!(new_attrs)
     end
   end

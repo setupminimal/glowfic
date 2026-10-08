@@ -38,6 +38,24 @@ RSpec.describe UpdateModelJob do
     UpdateModelJob.perform_now(*args)
   end
 
+  it "does not load each post's board and user separately" do
+    user = create(:user)
+    char = create(:character, user: user)
+    posts = create_list(:post, 3, user: user, board: create(:board))
+    posts.each { |post| post.update_columns(board_id: create(:board).id) } # rubocop:disable Rails/SkipsModelValidations
+    lookups = []
+    callback = lambda do |*, payload|
+      lookups << payload[:sql] if payload[:sql].start_with?('SELECT') && payload[:sql].match?(/FROM "(boards|users)" WHERE "\w+"."id" = \$1/)
+    end
+
+    ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') do
+      UpdateModelJob.perform_now('Post', { id: posts.map(&:id) }, { character_id: char.id }, user.id)
+    end
+
+    expect(posts.map { |post| post.reload.character_id }).to eq([char.id] * 3)
+    expect(lookups.size).to be <= 2
+  end
+
   it "does not update tagged_at" do
     reply = create(:reply)
     old_tag = reply.post.tagged_at
