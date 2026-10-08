@@ -90,8 +90,8 @@ class CharactersController < ApplicationController
         @character.assign_attributes(permitted_params)
         build_template
 
-        @character.settings = process_tags(Setting, obj_param: :character, id_param: :setting_ids)
-        @character.gallery_groups = process_tags(GalleryGroup, obj_param: :character, id_param: :gallery_group_ids)
+        replace_tags(@character, :settings, process_tags(Setting, obj_param: :character, id_param: :setting_ids))
+        replace_tags(@character, :gallery_groups, process_tags(GalleryGroup, obj_param: :character, id_param: :gallery_group_ids))
         @character.save!
       end
     rescue ActiveRecord::RecordInvalid => e

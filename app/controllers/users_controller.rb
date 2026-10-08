@@ -96,7 +96,7 @@ class UsersController < ApplicationController
 
     begin
       if params.fetch(:user, {}).key?(:content_warning_ids)
-        current_user.content_warnings = process_tags(ContentWarning, obj_param: :user, id_param: :content_warning_ids)
+        replace_tags(current_user, :content_warnings, process_tags(ContentWarning, obj_param: :user, id_param: :content_warning_ids))
       end
       current_user.update!(user_params)
     rescue ActiveRecord::RecordInvalid => e

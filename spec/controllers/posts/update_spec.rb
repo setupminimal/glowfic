@@ -33,9 +33,39 @@ RSpec.describe PostsController, 'PUT update' do
   let(:labels_select) { [label.id, duplicate_label.id, '_newlabel'] }
 
   let(:templateless_character) { create(:character, user: user) }
+
   let(:templated_character) { create(:template_character, user: user) }
   let(:character_alias) { create(:alias, character: templateless_character) }
   let(:icon) { create(:icon, user: user) }
+
+  context "with many tags" do
+    it "replaces them without querying per tag" do
+      post = create(
+        :post,
+        user: user,
+        settings: create_list(:setting, 3),
+        content_warnings: create_list(:content_warning, 3),
+        labels: create_list(:label, 3),
+      )
+      login_as(user)
+      settings = create_list(:setting, 3)
+      warnings = create_list(:content_warning, 3)
+      labels = create_list(:label, 3)
+
+      expect_no_n_plus_one do
+        put :update, params: {
+          id: post.id,
+          post: { setting_ids: settings.map(&:id), content_warning_ids: warnings.map(&:id), label_ids: labels.map(&:id) },
+        }
+      end
+
+      post.reload
+      expect(post.settings).to match_array(settings)
+      expect(post.content_warnings).to match_array(warnings)
+      expect(post.labels).to match_array(labels)
+      expect(PostTag.where(post: post).count).to eq(9)
+    end
+  end
 
   it "requires login" do
     put :update, params: { id: -1 }

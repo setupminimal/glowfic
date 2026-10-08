@@ -234,9 +234,9 @@ class PostsController < WritableController
 
     begin
       Post.transaction do
-        @post.settings = settings
-        @post.content_warnings = warnings
-        @post.labels = labels
+        replace_tags(@post, :settings, settings)
+        replace_tags(@post, :content_warnings, warnings)
+        replace_tags(@post, :labels, labels)
         process_npc(@post, permitted_character_params)
         @post.save!
         @post.author_for(current_user)&.update!(private_note: @post.private_note) if is_author

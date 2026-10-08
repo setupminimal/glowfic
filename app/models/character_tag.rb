@@ -11,6 +11,7 @@ class CharacterTag < ApplicationRecord
   after_destroy :remove_galleries_from_character
 
   def add_galleries_to_character
+    return if association(:setting).target.present? # built as a setting, so not a gallery group; avoids loading gallery_group
     return if gallery_group.nil? # skip non-gallery_groups
     joined_galleries = gallery_group.galleries.where(id: character.characters_galleries.map(&:gallery_id))
     galleries = gallery_group.galleries.where(user_id: character.user_id).where.not(id: joined_galleries.pluck(:id))

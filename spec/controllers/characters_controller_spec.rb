@@ -591,6 +591,28 @@ RSpec.describe CharactersController do
   end
 
   describe "PUT update" do
+    it "adds settings without querying per setting" do
+      user = create(:user)
+      login_as(user)
+      character = create(:character, user: user)
+      settings = create_list(:setting, 3)
+
+      expect_no_n_plus_one { put :update, params: { id: character.id, character: { setting_ids: settings.map(&:id) } } }
+
+      expect(character.reload.settings).to match_array(settings)
+    end
+
+    it "replaces its settings" do
+      user = create(:user)
+      login_as(user)
+      character = create(:character, user: user, settings: create_list(:setting, 2))
+      settings = create_list(:setting, 2)
+
+      put :update, params: { id: character.id, character: { setting_ids: settings.map(&:id) } }
+
+      expect(character.reload.settings).to match_array(settings)
+    end
+
     it "requires login" do
       put :update, params: { id: -1 }
       expect(response).to redirect_to(root_url)

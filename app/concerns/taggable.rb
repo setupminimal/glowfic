@@ -2,6 +2,33 @@
 module Taggable
   private
 
+  # Replaces the tags a record has through a join model (e.g. post.settings = tags). Rails decides which join records
+  # to remove by loading the tag behind each of them separately, and the join models' callbacks may too, so this
+  # loads the tags of all the join records first, in one query.
+  def replace_tags(record, association, tags)
+    unless record.new_record?
+      reflection = record.class.reflect_on_association(association)
+      load_join_tags(record.public_send(reflection.through_reflection.name).to_a, reflection.source_reflection.foreign_key)
+    end
+    record.public_send(:"#{association}=", tags)
+  end
+
+  # Gives each join record the tag it points to as every typed association of that tag (e.g. a character tag's
+  # tag, setting and gallery_group), as if each had been loaded, with nil for the types it is not.
+  def load_join_tags(join_records, foreign_key)
+    return if join_records.empty?
+    tags = Tag.where(id: join_records.pluck(foreign_key)).index_by(&:id)
+    tag_reflections = join_records.first.class.reflect_on_all_associations(:belongs_to).select do |reflection|
+      reflection.foreign_key.to_s == foreign_key.to_s
+    end
+    join_records.each do |join_record|
+      tag = tags[join_record[foreign_key]]
+      tag_reflections.each do |reflection|
+        join_record.association(reflection.name).target = (tag if tag.is_a?(reflection.klass))
+      end
+    end
+  end
+
   def process_tags(klass, obj_param:, id_param:)
     # fetch and clean tag ids
     ids = params.fetch(obj_param, {}).fetch(id_param, [])
