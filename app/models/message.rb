@@ -50,11 +50,6 @@ class Message < ApplicationRecord
     [sender_id, recipient_id]
   end
 
-  def num_in_thread
-    return self[:thread_count] if has_attribute?(:thread_count)
-    self.class.where(thread_id: thread_id).count
-  end
-
   def sender_name
     return 'Glowfic Constellation' if site_message?
     sender.username

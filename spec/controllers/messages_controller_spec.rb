@@ -48,8 +48,7 @@ RSpec.describe MessagesController do
         create_list(:message, 2, sender: first.sender, recipient: user, thread_id: first.id)
         other = create(:message, recipient: user)
         get :index
-        counts = assigns(:messages).to_h { |message| [message.thread_id, message.num_in_thread.to_i] }
-        expect(counts).to eq(first.id => 3, other.id => 1)
+        expect(assigns(:thread_counts)).to eq(first.id => 3, other.id => 1)
       end
 
       it "includes site messages" do
